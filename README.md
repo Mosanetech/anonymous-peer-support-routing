@@ -9,6 +9,8 @@ A React and Node.js prototype that routes students into anonymous temporary peer
 - Temporary group sessions with automatic expiry.
 - Anonymous group messaging using short polling.
 - Safe Valve request flow for high-risk or professional-support situations.
+- Therapist account login with a Safe Valve case queue.
+- Private Safe Valve chat between a student and the assigned therapist.
 - Local JSON storage for prototype data.
 
 ## Run Locally

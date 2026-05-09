@@ -107,6 +107,30 @@ textarea {
   padding: 24px;
 }
 
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.segmented button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 900;
+}
+
+.segmented .active {
+  color: var(--ink);
+  background: var(--surface);
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: var(--accent-dark);
@@ -550,10 +574,17 @@ textarea:focus {
 }
 
 .request-item {
+  width: 100%;
+  text-align: left;
   padding: 13px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfdfc;
+}
+
+.request-item.active {
+  border-color: #97cfc2;
+  background: var(--accent-soft);
 }
 
 .request-item strong,
@@ -575,6 +606,74 @@ textarea:focus {
   line-height: 1.45;
 }
 
+.therapist-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.case-chat-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.case-message-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.case-message {
+  width: min(82%, 620px);
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfc;
+}
+
+.case-message.student {
+  border-color: #c4ded8;
+  background: var(--accent-soft);
+}
+
+.case-message.therapist {
+  justify-self: end;
+  border-color: #cfd8e8;
+  background: #f0f4fb;
+}
+
+.case-message.system {
+  justify-self: center;
+  width: min(92%, 620px);
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.case-message strong {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.case-message p {
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.case-composer {
+  grid-template-columns: minmax(0, 1fr) 110px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.assign-button {
+  justify-self: start;
+}
+
 .privacy-panel {
   grid-column: 1 / -1;
 }
@@ -594,6 +693,7 @@ textarea:focus {
   .app-layout,
   .room-layout,
   .split-grid,
+  .therapist-layout,
   .metric-grid,
   .privacy-grid {
     grid-template-columns: 1fr;
@@ -677,6 +777,7 @@ textarea:focus {
   }
 
   .topic-grid,
+  .case-composer,
   .composer {
     grid-template-columns: 1fr;
   }
@@ -688,7 +789,10 @@ textarea:focus {
 
   .message,
   .message.mine,
-  .message.system {
+  .message.system,
+  .case-message,
+  .case-message.therapist,
+  .case-message.system {
     width: 100%;
   }
 

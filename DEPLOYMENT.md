@@ -22,12 +22,19 @@ GROUP_LIFETIME_MINUTES=90
 BODY_LIMIT_BYTES=16384
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=80
+THERAPIST_ACCOUNTS=[{"id":"therapist-1","name":"Dr. Your Therapist Name","username":"therapist1","password":"change-this-password"}]
 ```
 
 `ALLOWED_ORIGINS` must be an exact origin only: protocol plus domain, no path and no trailing slash. Example:
 
 ```text
 ALLOWED_ORIGINS=https://anonymous-peer-support-routing.onrender.com
+```
+
+`THERAPIST_ACCOUNTS` is a JSON array. Add real support staff here before deployment. Example with two accounts:
+
+```text
+THERAPIST_ACCOUNTS=[{"id":"therapist-1","name":"Campus Counsellor","username":"counsellor","password":"use-a-strong-password"},{"id":"therapist-2","name":"ICT Therapist","username":"icttherapist","password":"use-another-strong-password"}]
 ```
 
 ## Node Host Deployment

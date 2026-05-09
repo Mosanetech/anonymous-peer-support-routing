@@ -40,6 +40,7 @@ const api = {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [therapist, setTherapist] = useState(null);
   const [group, setGroup] = useState(null);
   const [safeValve, setSafeValve] = useState([]);
   const [activeView, setActiveView] = useState("vent");
@@ -67,7 +68,12 @@ function App() {
         setUser(data.user);
         await refresh();
       } catch {
-        api.clearToken();
+        try {
+          const data = await api.request("/api/therapist/me");
+          setTherapist(data.therapist);
+        } catch {
+          api.clearToken();
+        }
       } finally {
         setLoading(false);
       }
@@ -92,6 +98,16 @@ function App() {
     api.setToken(data.token);
     setUser(data.user);
     await refresh();
+  }
+
+  async function therapistLogin(payload) {
+    setError("");
+    const data = await api.request("/api/therapist/login", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    api.setToken(data.token);
+    setTherapist(data.therapist);
   }
 
   async function joinGroup(payload) {
@@ -137,9 +153,18 @@ function App() {
     setNotice("Safe Valve request created. A support professional can review this queue in the backend.");
   }
 
+  async function sendSafeValveMessage(caseId, content) {
+    const data = await api.request(`/api/safe-valve/${caseId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content })
+    });
+    setSafeValve((current) => current.map((item) => item.id === data.case.id ? data.case : item));
+  }
+
   function logout() {
     api.clearToken();
     setUser(null);
+    setTherapist(null);
     setGroup(null);
     setSafeValve([]);
     setActiveView("vent");
@@ -147,7 +172,8 @@ function App() {
   }
 
   if (loading) return <main className="loading-screen">Opening anonymous space...</main>;
-  if (!user) return <EntryScreen onStart={startSession} error={error} setError={setError} />;
+  if (therapist) return <TherapistDashboard therapist={therapist} onLogout={logout} />;
+  if (!user) return <EntryScreen onStart={startSession} onTherapistLogin={therapistLogin} error={error} setError={setError} />;
 
   return (
     <main className="app-layout">
@@ -187,7 +213,7 @@ function App() {
           <VentRoom group={group} user={user} onSend={sendMessage} onLeave={leaveGroup} onRoute={() => setActiveView("match")} />
         )}
         {activeView === "match" && <RoutingView group={group} onJoin={joinGroup} error={error} setError={setError} />}
-        {activeView === "safe" && <SafeValveView requests={safeValve} onCreate={createSafeValve} />}
+        {activeView === "safe" && <SafeValveView requests={safeValve} onCreate={createSafeValve} onMessage={sendSafeValveMessage} />}
         {activeView === "privacy" && <PrivacyView user={user} group={group} />}
       </section>
     </main>
@@ -203,15 +229,28 @@ function viewTitle(view) {
   }[view];
 }
 
-function EntryScreen({ onStart, error, setError }) {
+function EntryScreen({ onStart, onTherapistLogin, error, setError }) {
+  const [mode, setMode] = useState("student");
   const [alias, setAlias] = useState("");
   const [intensity, setIntensity] = useState("medium");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   async function submit(event) {
     event.preventDefault();
     setError("");
     try {
       await onStart({ alias, intensity });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function submitTherapist(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await onTherapistLogin({ username, password });
     } catch (err) {
       setError(err.message);
     }
@@ -226,7 +265,13 @@ function EntryScreen({ onStart, error, setError }) {
           Start with an anonymous identifier, choose what you are carrying, and get routed into a temporary Vent Group with students facing similar pressure.
         </p>
       </section>
-      <form className="entry-panel form-stack" onSubmit={submit}>
+      <section className="entry-panel">
+        <div className="segmented">
+          <button className={mode === "student" ? "active" : ""} type="button" onClick={() => setMode("student")}>Student</button>
+          <button className={mode === "therapist" ? "active" : ""} type="button" onClick={() => setMode("therapist")}>Therapist</button>
+        </div>
+        {mode === "student" ? (
+        <form className="form-stack" onSubmit={submit}>
         <div className="panel-heading">
           <h2>Anonymous session</h2>
           <p>No email or real name is required for this prototype.</p>
@@ -245,7 +290,26 @@ function EntryScreen({ onStart, error, setError }) {
         </label>
         <button className="primary-button" type="submit">Start anonymously</button>
         {error && <p className="error-text">{error}</p>}
-      </form>
+        </form>
+        ) : (
+        <form className="form-stack" onSubmit={submitTherapist}>
+          <div className="panel-heading">
+            <h2>Therapist account</h2>
+            <p>Use the support credentials configured for deployment.</p>
+          </div>
+          <label>
+            Username
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
+          </label>
+          <label>
+            Password
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" required />
+          </label>
+          <button className="primary-button" type="submit">Open support dashboard</button>
+          {error && <p className="error-text">{error}</p>}
+        </form>
+        )}
+      </section>
     </main>
   );
 }
@@ -416,14 +480,17 @@ function GroupPanel({ group }) {
   );
 }
 
-function SafeValveView({ requests, onCreate }) {
+function SafeValveView({ requests, onCreate, onMessage }) {
   const [reason, setReason] = useState("I need professional support");
   const [contactPreference, setContactPreference] = useState("in-app follow-up");
+  const [urgency, setUrgency] = useState("normal");
   const [details, setDetails] = useState("");
+  const [activeCaseId, setActiveCaseId] = useState("");
+  const activeCase = requests.find((request) => request.id === activeCaseId) || requests[0];
 
   async function submit(event) {
     event.preventDefault();
-    await onCreate({ reason, contactPreference, details });
+    await onCreate({ reason, contactPreference, urgency, details });
     setDetails("");
   }
 
@@ -452,6 +519,14 @@ function SafeValveView({ requests, onCreate }) {
           </select>
         </label>
         <label>
+          Urgency
+          <select value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+            <option value="normal">Normal</option>
+            <option value="same-day">Same-day support</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </label>
+        <label>
           Details
           <textarea value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Describe what support is needed." maxLength={500} required />
         </label>
@@ -464,16 +539,161 @@ function SafeValveView({ requests, onCreate }) {
         </div>
         <div className="request-list">
           {requests.map((request) => (
-            <div className="request-item" key={request.id}>
+            <button className={`request-item ${activeCase?.id === request.id ? "active" : ""}`} type="button" key={request.id} onClick={() => setActiveCaseId(request.id)}>
               <strong>{request.reason}</strong>
-              <span>{request.status}</span>
+              <span>{request.status} {request.assignedTherapistName ? `- ${request.assignedTherapistName}` : ""}</span>
               <p>{request.details}</p>
-            </div>
+            </button>
           ))}
           {!requests.length && <p className="empty-text">No Safe Valve requests yet.</p>}
         </div>
       </article>
+      {activeCase && <SafeValveCaseChat activeCase={activeCase} onMessage={onMessage} />}
     </section>
+  );
+}
+
+function SafeValveCaseChat({ activeCase, onMessage }) {
+  const [content, setContent] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!content.trim()) return;
+    await onMessage(activeCase.id, content);
+    setContent("");
+  }
+
+  return (
+    <article className="panel case-chat-panel">
+      <div className="panel-heading">
+        <h2>Private support chat</h2>
+        <p>{activeCase.assignedTherapistName ? `Assigned to ${activeCase.assignedTherapistName}` : "Waiting for therapist assignment"}</p>
+      </div>
+      <div className="case-message-list">
+        {(activeCase.messages || []).map((message) => (
+          <div className={`case-message ${message.senderType}`} key={message.id}>
+            <strong>{message.senderName}</strong>
+            <p>{message.content}</p>
+          </div>
+        ))}
+      </div>
+      <form className="composer case-composer" onSubmit={submit}>
+        <input value={content} onChange={(event) => setContent(event.target.value)} placeholder="Message your assigned support professional..." />
+        <button className="primary-button" type="submit">Send</button>
+      </form>
+    </article>
+  );
+}
+
+function TherapistDashboard({ therapist, onLogout }) {
+  const [cases, setCases] = useState([]);
+  const [activeCaseId, setActiveCaseId] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const activeCase = cases.find((item) => item.id === activeCaseId) || cases[0];
+
+  async function loadCases() {
+    const data = await api.request("/api/therapist/cases");
+    setCases(data.cases);
+  }
+
+  useEffect(() => {
+    loadCases().catch((err) => setError(err.message));
+    const timer = window.setInterval(() => loadCases().catch(() => {}), 3500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  async function assignCase(caseId) {
+    const data = await api.request(`/api/therapist/cases/${caseId}/assign`, { method: "POST" });
+    setCases((current) => current.map((item) => item.id === data.case.id ? data.case : item));
+    setActiveCaseId(data.case.id);
+  }
+
+  async function sendCaseMessage(event) {
+    event.preventDefault();
+    if (!activeCase || !message.trim()) return;
+    const data = await api.request(`/api/therapist/cases/${activeCase.id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content: message, status: "assigned" })
+    });
+    setCases((current) => current.map((item) => item.id === data.case.id ? data.case : item));
+    setMessage("");
+  }
+
+  return (
+    <main className="app-layout">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <span>SV</span>
+          <div>
+            <strong>Safe Valve</strong>
+            <small>{therapist.name}</small>
+          </div>
+        </div>
+        <nav>
+          <button className="active" type="button">Case queue</button>
+        </nav>
+        <button className="logout-button" type="button" onClick={onLogout}>Logout</button>
+      </aside>
+      <section className="content">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Professional support dashboard</p>
+            <h1>Safe Valve Cases</h1>
+          </div>
+          <div className="session-badge">
+            <span>Logged in</span>
+            <strong>{therapist.username}</strong>
+          </div>
+        </header>
+        {error && <p className="error-text">{error}</p>}
+        <section className="therapist-layout">
+          <article className="panel">
+            <div className="panel-heading">
+              <h2>Open and assigned cases</h2>
+              <p>{cases.length} case{cases.length === 1 ? "" : "s"} visible to this account</p>
+            </div>
+            <div className="request-list">
+              {cases.map((item) => (
+                <button className={`request-item ${activeCase?.id === item.id ? "active" : ""}`} type="button" key={item.id} onClick={() => setActiveCaseId(item.id)}>
+                  <strong>{item.reason}</strong>
+                  <span>{item.status} - {item.urgency}</span>
+                  <p>{item.alias} / {item.anonymousId}</p>
+                </button>
+              ))}
+              {!cases.length && <p className="empty-text">No Safe Valve cases yet.</p>}
+            </div>
+          </article>
+          <article className="panel case-chat-panel">
+            {activeCase ? (
+              <>
+                <div className="panel-heading">
+                  <h2>{activeCase.reason}</h2>
+                  <p>{activeCase.assignedTherapistName ? `Assigned to ${activeCase.assignedTherapistName}` : "Unassigned case"}</p>
+                </div>
+                {!activeCase.assignedTherapistId && (
+                  <button className="secondary-button assign-button" type="button" onClick={() => assignCase(activeCase.id)}>Accept case</button>
+                )}
+                <div className="case-message-list">
+                  {(activeCase.messages || []).map((item) => (
+                    <div className={`case-message ${item.senderType}`} key={item.id}>
+                      <strong>{item.senderName}</strong>
+                      <p>{item.content}</p>
+                    </div>
+                  ))}
+                </div>
+                <form className="composer case-composer" onSubmit={sendCaseMessage}>
+                  <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Reply privately to the student..." />
+                  <button className="primary-button" type="submit">Send</button>
+                </form>
+              </>
+            ) : (
+              <p className="empty-text">Select a case to view the private support conversation.</p>
+            )}
+          </article>
+        </section>
+      </section>
+    </main>
   );
 }
 

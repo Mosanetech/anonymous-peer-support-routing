@@ -29,6 +29,11 @@ const defaultDb = {
   safeValveRequests: []
 };
 
+const devTherapists = [
+  { id: "therapist-1", name: "Professional Therapist 1", username: "therapist1", password: "support1" },
+  { id: "therapist-2", name: "Professional Therapist 2", username: "therapist2", password: "support2" }
+];
+
 const riskTerms = [
   "suicide",
   "kill myself",
@@ -179,10 +184,46 @@ function getToken(req) {
   return header.startsWith("Bearer ") ? header.slice(7) : "";
 }
 
-function getUserFromToken(db, req) {
+function sessionValue(db, req) {
   const token = getToken(req);
-  const userId = db.sessions[token];
+  return db.sessions[token];
+}
+
+function getUserFromToken(db, req) {
+  const session = sessionValue(db, req);
+  const userId = typeof session === "string" ? session : session?.userId;
   return db.users.find((user) => user.id === userId) || null;
+}
+
+function therapistAccounts() {
+  if (process.env.THERAPIST_ACCOUNTS) {
+    try {
+      const parsed = JSON.parse(process.env.THERAPIST_ACCOUNTS);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item, index) => ({
+            id: sanitizeText(item.id || `therapist-${index + 1}`, 60),
+            name: sanitizeText(item.name, 80),
+            username: sanitizeText(item.username, 80).toLowerCase(),
+            password: String(item.password || "")
+          }))
+          .filter((item) => item.name && item.username && item.password);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return isProduction ? [] : devTherapists;
+}
+
+function publicTherapist(therapist) {
+  return { id: therapist.id, name: therapist.name, username: therapist.username };
+}
+
+function getTherapistFromToken(db, req) {
+  const session = sessionValue(db, req);
+  if (!session || session.type !== "therapist") return null;
+  return therapistAccounts().find((therapist) => therapist.id === session.therapistId) || null;
 }
 
 async function requireUser(req, res) {
@@ -194,6 +235,17 @@ async function requireUser(req, res) {
     return null;
   }
   return { db, user };
+}
+
+async function requireTherapist(req, res) {
+  const db = await readDb();
+  cleanupExpiredGroups(db);
+  const therapist = getTherapistFromToken(db, req);
+  if (!therapist) {
+    send(res, 401, { error: "Therapist login is required." });
+    return null;
+  }
+  return { db, therapist };
 }
 
 function publicUser(user) {
@@ -330,7 +382,30 @@ function containsRiskLanguage(text) {
   return riskTerms.some((term) => lower.includes(term));
 }
 
+function chooseTherapist(db) {
+  const therapists = therapistAccounts();
+  if (!therapists.length) return null;
+  return therapists
+    .map((therapist) => ({
+      therapist,
+      openCases: db.safeValveRequests.filter((request) => request.assignedTherapistId === therapist.id && request.status !== "closed").length
+    }))
+    .sort((a, b) => a.openCases - b.openCases)[0].therapist;
+}
+
+function caseMessage(senderType, senderId, senderName, content) {
+  return {
+    id: crypto.randomUUID(),
+    senderType,
+    senderId,
+    senderName,
+    content: sanitizeText(content, 700),
+    createdAt: new Date().toISOString()
+  };
+}
+
 function createSafeValveRequest(db, user, payload, sourceMessageId = null) {
+  const therapist = chooseTherapist(db);
   const request = {
     id: crypto.randomUUID(),
     userId: user.id,
@@ -339,12 +414,44 @@ function createSafeValveRequest(db, user, payload, sourceMessageId = null) {
     reason: sanitizeText(payload.reason || "Possible high-risk distress", 120),
     contactPreference: sanitizeText(payload.contactPreference || "in-app follow-up", 80),
     details: sanitizeText(payload.details || "Created from message safety detection.", 500),
-    status: "open",
+    urgency: sanitizeText(payload.urgency || "normal", 40),
+    status: therapist ? "assigned" : "open",
+    assignedTherapistId: therapist?.id || null,
+    assignedTherapistName: therapist?.name || null,
     sourceMessageId,
+    messages: [
+      caseMessage("student", user.id, user.alias, payload.details || "Safe Valve support requested."),
+      caseMessage(
+        "system",
+        "system",
+        "System",
+        therapist
+          ? `This case was assigned to ${therapist.name}.`
+          : "This case is waiting for a therapist account to be configured."
+      )
+    ],
     createdAt: new Date().toISOString()
   };
   db.safeValveRequests.unshift(request);
   return request;
+}
+
+function publicSafeValveRequest(request) {
+  return {
+    id: request.id,
+    anonymousId: request.anonymousId,
+    alias: request.alias,
+    reason: request.reason,
+    contactPreference: request.contactPreference,
+    details: request.details,
+    urgency: request.urgency || "normal",
+    status: request.status,
+    assignedTherapistId: request.assignedTherapistId || null,
+    assignedTherapistName: request.assignedTherapistName || null,
+    sourceMessageId: request.sourceMessageId || null,
+    messages: request.messages || [],
+    createdAt: request.createdAt
+  };
 }
 
 async function router(req, res) {
@@ -388,6 +495,88 @@ async function router(req, res) {
       db.sessions[token] = user.id;
       await writeDb(db);
       send(res, 201, { token, user: publicUser(user) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/therapist/login") {
+      const body = await parseBody(req);
+      const username = sanitizeText(body.username, 80).toLowerCase();
+      const password = String(body.password || "");
+      const therapist = therapistAccounts().find((candidate) => candidate.username === username && candidate.password === password);
+      if (!therapist) {
+        send(res, 401, { error: "Therapist username or password is incorrect." });
+        return;
+      }
+      const db = await readDb();
+      const token = crypto.randomBytes(32).toString("hex");
+      db.sessions[token] = { type: "therapist", therapistId: therapist.id };
+      await writeDb(db);
+      send(res, 200, { token, therapist: publicTherapist(therapist) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/therapist/me") {
+      const auth = await requireTherapist(req, res);
+      if (!auth) return;
+      send(res, 200, { therapist: publicTherapist(auth.therapist) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/therapist/cases") {
+      const auth = await requireTherapist(req, res);
+      if (!auth) return;
+      const cases = auth.db.safeValveRequests
+        .filter((request) => !request.assignedTherapistId || request.assignedTherapistId === auth.therapist.id)
+        .map(publicSafeValveRequest);
+      send(res, 200, { cases });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.match(/^\/api\/therapist\/cases\/[^/]+\/assign$/)) {
+      const auth = await requireTherapist(req, res);
+      if (!auth) return;
+      const id = url.pathname.split("/")[4];
+      const request = auth.db.safeValveRequests.find((entry) => entry.id === id);
+      if (!request) {
+        send(res, 404, { error: "Safe Valve case not found." });
+        return;
+      }
+      request.assignedTherapistId = auth.therapist.id;
+      request.assignedTherapistName = auth.therapist.name;
+      request.status = "assigned";
+      request.messages = request.messages || [];
+      request.messages.push(caseMessage("system", "system", "System", `${auth.therapist.name} accepted this Safe Valve case.`));
+      await writeDb(auth.db);
+      send(res, 200, { case: publicSafeValveRequest(request) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.match(/^\/api\/therapist\/cases\/[^/]+\/messages$/)) {
+      const auth = await requireTherapist(req, res);
+      if (!auth) return;
+      const body = await parseBody(req);
+      const id = url.pathname.split("/")[4];
+      const request = auth.db.safeValveRequests.find((entry) => entry.id === id);
+      if (!request) {
+        send(res, 404, { error: "Safe Valve case not found." });
+        return;
+      }
+      if (request.assignedTherapistId && request.assignedTherapistId !== auth.therapist.id) {
+        send(res, 403, { error: "This case is assigned to another therapist." });
+        return;
+      }
+      const content = sanitizeText(body.content);
+      if (!content) {
+        send(res, 400, { error: "Message content is required." });
+        return;
+      }
+      request.assignedTherapistId = auth.therapist.id;
+      request.assignedTherapistName = auth.therapist.name;
+      request.status = sanitizeText(body.status, 40) || request.status || "assigned";
+      request.messages = request.messages || [];
+      request.messages.push(caseMessage("therapist", auth.therapist.id, auth.therapist.name, content));
+      await writeDb(auth.db);
+      send(res, 201, { case: publicSafeValveRequest(request) });
       return;
     }
 
@@ -512,7 +701,9 @@ async function router(req, res) {
       }
       createSafeValveRequest(auth.db, auth.user, body);
       await writeDb(auth.db);
-      const requests = auth.db.safeValveRequests.filter((request) => request.userId === auth.user.id);
+      const requests = auth.db.safeValveRequests
+        .filter((request) => request.userId === auth.user.id)
+        .map(publicSafeValveRequest);
       send(res, 201, { requests });
       return;
     }
@@ -520,8 +711,32 @@ async function router(req, res) {
     if (req.method === "GET" && url.pathname === "/api/safe-valve") {
       const auth = await requireUser(req, res);
       if (!auth) return;
-      const requests = auth.db.safeValveRequests.filter((request) => request.userId === auth.user.id);
+      const requests = auth.db.safeValveRequests
+        .filter((request) => request.userId === auth.user.id)
+        .map(publicSafeValveRequest);
       send(res, 200, { requests });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.match(/^\/api\/safe-valve\/[^/]+\/messages$/)) {
+      const auth = await requireUser(req, res);
+      if (!auth) return;
+      const body = await parseBody(req);
+      const id = url.pathname.split("/")[3];
+      const request = auth.db.safeValveRequests.find((entry) => entry.id === id && entry.userId === auth.user.id);
+      if (!request) {
+        send(res, 404, { error: "Safe Valve case not found." });
+        return;
+      }
+      const content = sanitizeText(body.content);
+      if (!content) {
+        send(res, 400, { error: "Message content is required." });
+        return;
+      }
+      request.messages = request.messages || [];
+      request.messages.push(caseMessage("student", auth.user.id, auth.user.alias, content));
+      await writeDb(auth.db);
+      send(res, 201, { case: publicSafeValveRequest(request) });
       return;
     }
 
