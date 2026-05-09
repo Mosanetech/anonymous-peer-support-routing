@@ -295,7 +295,7 @@ function EntryScreen({ onStart, onTherapistLogin, error, setError }) {
         <form className="form-stack" onSubmit={submitTherapist}>
           <div className="panel-heading">
             <h2>Therapist account</h2>
-            <p>Use the support credentials configured for deployment.</p>
+            
           </div>
           <label>
             Username
