@@ -211,6 +211,7 @@ function publicGroup(group) {
   return {
     id: group.id,
     name: group.name,
+    primaryTopic: group.primaryTopic || primaryTopic(group.topics),
     topics: group.topics,
     intensity: group.intensity,
     capacity: group.capacity,
@@ -256,9 +257,8 @@ function activeGroupForUser(db, userId) {
   return db.groups.find((group) => group.status === "active" && group.participants.some((participant) => participant.id === userId)) || null;
 }
 
-function topicOverlap(a, b) {
-  const bSet = new Set(b);
-  return a.filter((topic) => bSet.has(topic)).length;
+function primaryTopic(topics) {
+  return sanitizeText(Array.isArray(topics) ? topics[0] : "", 60);
 }
 
 function createSystemMessage(content) {
@@ -273,6 +273,7 @@ function createSystemMessage(content) {
 }
 
 function routeUserToGroup(db, user, topics, intensity, note) {
+  const requestedTopic = primaryTopic(topics);
   const activeGroup = activeGroupForUser(db, user.id);
   if (activeGroup) {
     activeGroup.participants = activeGroup.participants.filter((participant) => participant.id !== user.id);
@@ -281,10 +282,10 @@ function routeUserToGroup(db, user, topics, intensity, note) {
 
   const candidates = db.groups
     .filter((group) => group.status === "active")
+    .filter((group) => group.primaryTopic === requestedTopic || (!group.primaryTopic && primaryTopic(group.topics) === requestedTopic))
     .filter((group) => group.participants.length < group.capacity)
     .filter((group) => !group.participants.some((participant) => participant.id === user.id))
-    .map((group) => ({ group, score: topicOverlap(topics, group.topics) + (group.intensity === intensity ? 1 : 0) }))
-    .filter((candidate) => candidate.score > 0)
+    .map((group) => ({ group, score: group.intensity === intensity ? 1 : 0 }))
     .sort((a, b) => b.score - a.score || b.group.participants.length - a.group.participants.length);
 
   let created = false;
@@ -294,8 +295,9 @@ function routeUserToGroup(db, user, topics, intensity, note) {
     const expiresAt = new Date(now.getTime() + GROUP_LIFETIME_MINUTES * 60000);
     const newGroup = {
       id: crypto.randomUUID(),
-      name: `${topics[0]} Circle`,
-      topics,
+      name: `${requestedTopic} Circle`,
+      primaryTopic: requestedTopic,
+      topics: [requestedTopic],
       intensity,
       capacity: GROUP_CAPACITY,
       status: "active",
@@ -407,10 +409,11 @@ async function router(req, res) {
         send(res, 400, { error: "Choose at least one support theme." });
         return;
       }
+      const routingTopics = [primaryTopic(topics)];
       const result = routeUserToGroup(
         auth.db,
         auth.user,
-        topics,
+        routingTopics,
         normalizeIntensity(body.intensity),
         sanitizeText(body.note, 220)
       );

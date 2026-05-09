@@ -260,21 +260,17 @@ function SessionBadge({ user, group }) {
 }
 
 function RoutingView({ group, onJoin, error, setError }) {
-  const [selected, setSelected] = useState(["Exam pressure"]);
+  const [selected, setSelected] = useState("Exam pressure");
   const [intensity, setIntensity] = useState("medium");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-
-  function toggle(topic) {
-    setSelected((current) => current.includes(topic) ? current.filter((item) => item !== topic) : [...current, topic]);
-  }
 
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await onJoin({ topics: selected, intensity, note });
+      await onJoin({ topics: [selected], intensity, note });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -297,7 +293,12 @@ function RoutingView({ group, onJoin, error, setError }) {
         <div className="topic-grid">
           {focusAreas.map((topic) => (
             <label className="topic-option" key={topic}>
-              <input type="checkbox" checked={selected.includes(topic)} onChange={() => toggle(topic)} />
+              <input
+                type="radio"
+                name="support-topic"
+                checked={selected === topic}
+                onChange={() => setSelected(topic)}
+              />
               <span>{topic}</span>
             </label>
           ))}
