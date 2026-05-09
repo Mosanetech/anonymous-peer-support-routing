@@ -76,8 +76,11 @@ function securityHeaders() {
   };
 }
 
-function originAllowed(origin) {
+function originAllowed(req, origin) {
   if (!origin) return true;
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const protocol = req.headers["x-forwarded-proto"] || (req.socket.encrypted ? "https" : "http");
+  if (host && origin === `${protocol}://${host}`) return true;
   if (!isProduction && /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) return true;
   return ALLOWED_ORIGINS.includes(origin);
 }
@@ -85,7 +88,7 @@ function originAllowed(origin) {
 function applyBaseHeaders(req, res) {
   Object.entries(securityHeaders()).forEach(([key, value]) => res.setHeader(key, value));
   const origin = req.headers.origin || "";
-  if (originAllowed(origin)) {
+  if (originAllowed(req, origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin || "*");
     res.setHeader("Vary", "Origin");
   }
@@ -345,7 +348,7 @@ function createSafeValveRequest(db, user, payload, sourceMessageId = null) {
 async function router(req, res) {
   applyBaseHeaders(req, res);
 
-  if (!originAllowed(req.headers.origin || "")) {
+  if (!originAllowed(req, req.headers.origin || "")) {
     send(res, 403, { error: "Origin is not allowed." });
     return;
   }

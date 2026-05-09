@@ -24,6 +24,12 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=80
 ```
 
+`ALLOWED_ORIGINS` must be an exact origin only: protocol plus domain, no path and no trailing slash. Example:
+
+```text
+ALLOWED_ORIGINS=https://anonymous-peer-support-routing.onrender.com
+```
+
 ## Node Host Deployment
 
 Use these commands:

@@ -72,4 +72,3 @@ http://127.0.0.1:4020
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for environment variables, Docker deployment, and production hardening requirements.
 
 This deployment package includes security headers, controlled CORS, request limits, rate limiting, and a health endpoint. Before using it with real students, replace local JSON storage with a managed database, add therapist/admin roles, add audited encryption, and define a staffed crisis-response policy.
-"# anonymous-peer-support-routing" 
