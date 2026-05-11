@@ -456,10 +456,12 @@ function VentRoom({ group, user, onSend, onLeave, onRoute }) {
 
 function GroupPanel({ group }) {
   const expiresIn = useMemo(() => {
-    const minutes = Math.max(0, Math.round((new Date(group.expiresAt) - Date.now()) / 60000));
-    return `${minutes} min`;
-  }, [group.expiresAt, group.messages.length]);
+    const remainingMs = new Date(group.expiresAt) - Date.now();
 
+    const days = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+
+    return `${days} day${days !== 1 ? "s" : ""}`;
+  }, [group.expiresAt, group.messages.length]);
   return (
     <aside className="side-panel">
       <div className="panel-heading">
