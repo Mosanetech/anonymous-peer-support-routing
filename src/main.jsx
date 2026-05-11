@@ -235,7 +235,7 @@ function EntryScreen({ onStart, onTherapistLogin, error, setError }) {
   const [intensity, setIntensity] = useState("medium");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   async function submit(event) {
     event.preventDefault();
     setError("");
@@ -281,14 +281,34 @@ function EntryScreen({ onStart, onTherapistLogin, error, setError }) {
           <input value={alias} onChange={(event) => setAlias(event.target.value)} placeholder="Leave blank for auto-generated" maxLength={28} />
         </label>
         <label>
-          Current pressure level
-          <select value={intensity} onChange={(event) => setIntensity(event.target.value)}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <button className="primary-button" type="submit">Start anonymously</button>
+  Current pressure level
+  <select value={intensity} onChange={(event) => setIntensity(event.target.value)}>
+    <option value="low">Low</option>
+    <option value="medium">Medium</option>
+    <option value="high">High</option>
+  </select>
+</label>
+
+<label className="terms-check">
+  <input
+    type="checkbox"
+    checked={acceptedTerms}
+    onChange={(event) => setAcceptedTerms(event.target.checked)}
+    required
+  />
+  <span>
+    I agree to the anonymous support terms, privacy policy, and understand
+    that Echovase is not a replacement for emergency medical services.
+  </span>
+</label>
+
+<button
+  className="primary-button"
+  type="submit"
+  disabled={!acceptedTerms}
+>
+  Start anonymously
+</button>
         {error && <p className="error-text">{error}</p>}
         </form>
         ) : (
