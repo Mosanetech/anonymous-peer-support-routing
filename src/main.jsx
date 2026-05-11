@@ -297,7 +297,7 @@ function EntryScreen({ onStart, onTherapistLogin, error, setError }) {
     required
   />
   <span>
-    I agree to the anonymous support terms, privacy policy, and understand
+    I agree to the Echovase support terms, privacy policy, and understand
     that Echovase is not a replacement for emergency medical services.
   </span>
 </label>
