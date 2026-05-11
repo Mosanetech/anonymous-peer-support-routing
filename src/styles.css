@@ -801,3 +801,35 @@ textarea:focus {
     width: 100%;
   }
 }
+.terms-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.terms-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: auto;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.terms-check span {
+  color: var(--ink);
+}
+
+.terms-check:hover {
+  border-color: #b7d7cf;
+  background: #f4fbf8;
+}
