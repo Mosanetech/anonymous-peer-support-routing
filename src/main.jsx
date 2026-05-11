@@ -365,8 +365,8 @@ function RoutingView({ group, onJoin, error, setError }) {
   return (
     <div className="view-stack">
       <section className="metric-grid">
-        <Metric title="Group size" value="3 to 5 " />
-        <Metric title="Session lifetime" value="1 days" />
+        <Metric title="Group size" value="max 5 " />
+        <Metric title="Session lifetime" value="1 day" />
         <Metric title="Identity mode" value="Anonymous" />
       </section>
       <form className="panel form-stack" onSubmit={submit}>
