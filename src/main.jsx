@@ -708,12 +708,15 @@ function PrivacyView({ user, group }) {
           <h2>Prototype security model</h2>
           <p>This local build demonstrates the privacy workflow and routing logic.</p>
         </div>
-        <ul>
-          <li>Students use anonymous aliases and token-based sessions.</li>
-          <li>Vent Groups expire after a short session window.</li>
-          <li>Messages are attached to anonymous identifiers, not real names.</li>
-          <li>High-risk language opens a Safe Valve request for professional review.</li>
-        </ul>
+       <ul>
+        <li>No real names or student IDs are required to access peer support.</li>
+        <li>Users are identified using anonymous session identifiers.</li>
+        <li>Messages are encrypted and stored securely in the backend database.</li>
+        <li>Vent Groups automatically expire after inactivity to protect privacy.</li>
+        <li>Only authorized therapists can access escalated Safe Valve cases.</li>
+        <li>Users must consent to privacy terms before entering the platform.</li>
+        <li>Echovase does not publicly expose conversations or participant identities.</li>
+      </ul>
       </article>
     </section>
   );
