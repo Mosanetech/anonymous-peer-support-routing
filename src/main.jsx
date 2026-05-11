@@ -365,8 +365,8 @@ function RoutingView({ group, onJoin, error, setError }) {
   return (
     <div className="view-stack">
       <section className="metric-grid">
-        <Metric title="Group size" value="3 to 5" />
-        <Metric title="Session lifetime" value="3 days" />
+        <Metric title="Group size" value="3 to 5 " />
+        <Metric title="Session lifetime" value="1 days" />
         <Metric title="Identity mode" value="Anonymous" />
       </section>
       <form className="panel form-stack" onSubmit={submit}>
@@ -536,8 +536,8 @@ function SafeValveView({ requests, onCreate, onMessage }) {
           Preferred follow-up
           <select value={contactPreference} onChange={(event) => setContactPreference(event.target.value)}>
             <option>in-app follow-up</option>
-            <option>campus counsellor referral</option>
-            <option>ICT therapist queue</option>
+            <option>campus counsellor/therapist referral</option>
+            
           </select>
         </label>
         <label>
